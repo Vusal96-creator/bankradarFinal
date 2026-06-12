@@ -1,0 +1,70 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: bankradar-postgres
+    environment:
+      POSTGRES_DB: bankradar
+      POSTGRES_USER: bankradar
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bankradar"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  kafka:
+    image: apache/kafka:3.8.0
+    container_name: bankradar-kafka
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: INTERNAL://kafka:29092,EXTERNAL://0.0.0.0:9092,CONTROLLER://kafka:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092,EXTERNAL://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_HEAP_OPTS: "-Xms128m -Xmx256m"
+      CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
+
+  redis:
+    image: redis:7-alpine
+    container_name: bankradar-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --maxmemory 128mb --maxmemory-policy allkeys-lru
+
+
+  app:
+    build: .
+    image: bankradar:latest
+    container_name: bankradar-app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      kafka:
+        condition: service_started
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      DB_PASSWORD: ${DB_PASSWORD:-changeme}
+      JWT_SECRET: ${JWT_SECRET:-please-change-me-in-production-min-32-chars-long}
+      GROK_API_KEY: ${GROK_API_KEY:-}
+      GROK_MODEL: ${GROK_MODEL:-llama-3.1-8b-instant}
+      KAFKA_GROUP_ID: ${KAFKA_GROUP_ID:-bankradar-risk-group}
+      JAVA_TOOL_OPTIONS: -Xms256m -Xmx450m
+    ports:
+      - "8080:8080"
+      - "9090:9090"
+
+volumes:
+  postgres-data:

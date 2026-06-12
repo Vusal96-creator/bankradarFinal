@@ -1,0 +1,45 @@
+type Query {
+    """ Get a single transaction by ID. """
+    transaction(id: ID!): Transaction
+
+    """ Get all transactions for a customer, newest first. """
+    customerTransactions(customerId: ID!): [Transaction!]!
+
+    """ Get all transactions currently flagged as SUSPICIOUS or FRAUD. """
+    flaggedTransactions: [Transaction!]!
+
+    """ Last 50 fraud alerts (for analyst dashboard). """
+    recentAlerts: [Alert!]!
+
+    """ Alerts for a specific customer. """
+    customerAlerts(customerId: ID!): [Alert!]!
+}
+
+type Transaction {
+    id: ID!
+    customerId: ID!
+    amount: Float!
+    currency: String!
+    country: String!
+    merchantCategory: String!
+    timestamp: String!
+    riskStatus: RiskStatus!
+    riskScore: Int
+}
+
+type Alert {
+    id: ID!
+    transactionId: ID!
+    customerId: ID!
+    riskScore: Int!
+    status: RiskStatus!
+    reasons: String
+    createdAt: String!
+}
+
+enum RiskStatus {
+    PENDING
+    SAFE
+    SUSPICIOUS
+    FRAUD
+}

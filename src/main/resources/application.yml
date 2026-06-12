@@ -1,0 +1,85 @@
+spring:
+  application:
+    name: bankradar
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
+  autoconfigure:
+    exclude:
+      - net.devh.boot.grpc.server.autoconfigure.GrpcServerSecurityAutoConfiguration
+  kafka:
+    consumer:
+      group-id: ${KAFKA_GROUP_ID:bankradar-risk-group}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        format_sql: false
+    show-sql: false
+  graphql:
+    graphiql:
+      enabled: true
+      path: /graphiql
+
+server:
+  port: 8080
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:please-change-me-in-production-min-32-chars-long}
+    expiration: 3600000
+  grok:
+    api-url: ${GROK_API_URL:https://api.groq.com/openai/v1/chat/completions}
+    api-key: ${GROK_API_KEY:}
+    model: ${GROK_MODEL:llama-3.1-8b-instant}
+    timeout-ms: 30000
+  kafka:
+    topics:
+      transactions: bankradar.transactions
+      transactions-dlq: bankradar.transactions.dlq
+  fraud:
+    velocity-threshold: 5
+    velocity-window-seconds: 60
+    high-amount-threshold: 10000
+    llm-borderline-min: 40
+    llm-borderline-max: 70
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      grokFraudClient:
+        register-health-indicator: true
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+        permitted-number-of-calls-in-half-open-state: 3
+        automatic-transition-from-open-to-half-open-enabled: true
+  retry:
+    instances:
+      grokFraudClient:
+        max-attempts: 3
+        wait-duration: 500ms
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,circuitbreakers
+  endpoint:
+    health:
+      show-details: always
+  health:
+    circuitbreakers:
+      enabled: true
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+  api-docs:
+    path: /v3/api-docs
+
+logging:
+  level:
+    az.bankradar: INFO
+    org.springframework.kafka: WARN

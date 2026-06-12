@@ -1,0 +1,52 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "az.bankradar.grpc.proto";
+option java_outer_classname = "RiskStreamProto";
+
+package az.bankradar.grpc;
+
+// RiskStreamService — gRPC service for other banking microservices
+// to subscribe to a low-latency stream of fraud risk events.
+//
+// Two RPCs:
+//   - SubscribeToRiskEvents:  server-side streaming — client subscribes once,
+//                             server pushes RiskEventProto messages as fraud
+//                             events are detected.
+//   - GetRiskAssessment:      unary — get a single transaction's current risk.
+service RiskStreamService {
+
+  rpc SubscribeToRiskEvents(SubscribeRequest) returns (stream RiskEventProto);
+
+  rpc GetRiskAssessment(GetRiskRequest) returns (RiskEventProto);
+}
+
+message SubscribeRequest {
+  // Identifier for this subscriber (for logging/debugging)
+  string subscriber_id = 1;
+  // Optional filter: only stream events with risk_score >= this value (0..100)
+  int32 min_risk_score = 2;
+}
+
+message GetRiskRequest {
+  string transaction_id = 1;
+}
+
+message RiskEventProto {
+  string transaction_id = 1;
+  string customer_id    = 2;
+  double amount         = 3;
+  string currency       = 4;
+  string country        = 5;
+  int32  risk_score     = 6;
+  RiskStatusProto status = 7;
+  string reasons        = 8;
+  string timestamp      = 9;   // ISO-8601 string
+}
+
+enum RiskStatusProto {
+  PENDING    = 0;
+  SAFE       = 1;
+  SUSPICIOUS = 2;
+  FRAUD      = 3;
+}

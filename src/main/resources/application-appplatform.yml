@@ -1,0 +1,87 @@
+# ============================================================
+#  App Platform profile — DigitalOcean App Platform production
+# ============================================================
+# Activated when SPRING_PROFILES_ACTIVE=appplatform.
+#
+# Required environment variables (set in App Platform UI or .do/app.yaml):
+#
+#  Database (auto-injected from DO Managed Postgres when bound):
+#    DB_HOSTNAME, DB_PORT, DB_DATABASE, DB_USERNAME, DB_PASSWORD
+#
+#  Kafka provider (DigitalOcean Managed Kafka or Confluent Cloud):
+#    KAFKA_BOOTSTRAP_SERVERS, KAFKA_USERNAME, KAFKA_PASSWORD, KAFKA_GROUP_ID
+#
+#  Upstash Redis (from console.upstash.com → Redis database → REST API):
+#    REDIS_HOST, REDIS_PORT, REDIS_PASSWORD
+#
+#  App secrets:
+#    JWT_SECRET, GROK_API_KEY
+
+spring:
+  # ---------- PostgreSQL (DO Managed Database) ----------
+  datasource:
+    url: jdbc:postgresql://${DB_HOSTNAME}:${DB_PORT}/${DB_DATABASE}?sslmode=require
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 5    # Dev DB has limited connections
+      minimum-idle: 1
+
+  # ---------- Redis (Upstash, TLS) ----------
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
+      password: ${REDIS_PASSWORD}
+      ssl:
+        enabled: true
+      timeout: 5000ms
+
+  # ---------- Kafka (Managed Kafka, SASL_SSL + SCRAM-SHA-256) ----------
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all
+      retries: 3
+      properties:
+        enable.idempotence: true
+        security.protocol: SASL_SSL
+        sasl.mechanism: SCRAM-SHA-256
+        sasl.jaas.config: 'org.apache.kafka.common.security.scram.ScramLoginModule required username="${KAFKA_USERNAME}" password="${KAFKA_PASSWORD}";'
+    consumer:
+      group-id: ${KAFKA_GROUP_ID:bankradar-risk-group}
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "az.bankradar.*"
+        spring.json.use.type.headers: false
+        security.protocol: SASL_SSL
+        sasl.mechanism: SCRAM-SHA-256
+        sasl.jaas.config: 'org.apache.kafka.common.security.scram.ScramLoginModule required username="${KAFKA_USERNAME}" password="${KAFKA_PASSWORD}";'
+
+  # ---------- GraphiQL — disable in production ----------
+  graphql:
+    graphiql:
+      enabled: false
+
+# ---------- gRPC ----------
+# App Platform only exposes ONE HTTP port externally (8080).
+# We disable the gRPC server here because nothing can reach 9090 from outside.
+# For real-time event streaming use the SSE endpoint at /api/alerts/stream instead.
+grpc:
+  server:
+    port: -1   # disabled
+
+# Production logging — quieter, only WARN+ for noisy libraries
+logging:
+  level:
+    root: INFO
+    az.bankradar: INFO
+    org.springframework: WARN
+    org.springframework.kafka: WARN
+    io.github.resilience4j: WARN
+    org.hibernate: WARN
