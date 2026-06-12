@@ -3,44 +3,66 @@
 # ============================================================
 # Activated when SPRING_PROFILES_ACTIVE=appplatform.
 #
-# Required environment variables (set in App Platform UI or .do/app.yaml):
+# DigitalOcean App Platform dev database automatically injects:
+#   DATABASE_URL=${dev-db-xxxxx.DATABASE_URL}
 #
-#  Database (auto-injected from DO Managed Postgres when bound):
-#    DB_HOSTNAME, DB_PORT, DB_DATABASE, DB_USERNAME, DB_PASSWORD
+# Required environment variables in App Platform:
 #
-#  Kafka provider (DigitalOcean Managed Kafka or Confluent Cloud):
-#    KAFKA_BOOTSTRAP_SERVERS, KAFKA_USERNAME, KAFKA_PASSWORD, KAFKA_GROUP_ID
+#  App:
+#    SPRING_PROFILES_ACTIVE=appplatform
+#    JAVA_OPTS=-Xms128m -Xmx384m
 #
-#  Upstash Redis (from console.upstash.com → Redis database → REST API):
-#    REDIS_HOST, REDIS_PORT, REDIS_PASSWORD
+#  Database:
+#    DATABASE_URL
 #
-#  App secrets:
+#  Redis / Upstash:
+#    REDIS_HOST, REDIS_PORT, REDIS_PASSWORD, REDIS_SSL
+#
+#  Kafka:
+#    KAFKA_BOOTSTRAP_SERVERS, KAFKA_USERNAME, KAFKA_PASSWORD,
+#    KAFKA_GROUP_ID, KAFKA_TOPIC_TRANSACTIONS,
+#    KAFKA_SECURITY_PROTOCOL, KAFKA_SASL_MECHANISM
+#
+#  Secrets:
 #    JWT_SECRET, GROK_API_KEY
 
+server:
+  port: ${PORT:8080}
+  address: 0.0.0.0
+
 spring:
-  # ---------- PostgreSQL (DO Managed Database) ----------
+  # ---------- PostgreSQL / DigitalOcean Dev Database ----------
   datasource:
-    url: jdbc:postgresql://${DB_HOSTNAME}:${DB_PORT}/${DB_DATABASE}?sslmode=require
-    username: ${DB_USERNAME}
-    password: ${DB_PASSWORD}
+    url: ${DATABASE_URL}
     driver-class-name: org.postgresql.Driver
     hikari:
-      maximum-pool-size: 5    # Dev DB has limited connections
+      maximum-pool-size: 5
       minimum-idle: 1
 
-  # ---------- Redis (Upstash, TLS) ----------
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: false
+    show-sql: false
+    open-in-view: false
+
+  # ---------- Redis / Upstash ----------
   data:
     redis:
       host: ${REDIS_HOST}
-      port: ${REDIS_PORT}
+      port: ${REDIS_PORT:6379}
       password: ${REDIS_PASSWORD}
       ssl:
-        enabled: true
+        enabled: ${REDIS_SSL:true}
       timeout: 5000ms
 
-  # ---------- Kafka (Managed Kafka, SASL_SSL + SCRAM-SHA-256) ----------
+  # ---------- Kafka ----------
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
+
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
@@ -48,35 +70,70 @@ spring:
       retries: 3
       properties:
         enable.idempotence: true
-        security.protocol: SASL_SSL
-        sasl.mechanism: SCRAM-SHA-256
+        spring.json.add.type.headers: false
+        security.protocol: ${KAFKA_SECURITY_PROTOCOL:SASL_SSL}
+        sasl.mechanism: ${KAFKA_SASL_MECHANISM:SCRAM-SHA-256}
         sasl.jaas.config: 'org.apache.kafka.common.security.scram.ScramLoginModule required username="${KAFKA_USERNAME}" password="${KAFKA_PASSWORD}";'
+
     consumer:
       group-id: ${KAFKA_GROUP_ID:bankradar-risk-group}
       auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
       properties:
-        spring.json.trusted.packages: "az.bankradar.*"
+        spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
+        spring.json.trusted.packages: az.bankradar.transaction
+        spring.json.value.default.type: az.bankradar.transaction.TransactionEvent
         spring.json.use.type.headers: false
-        security.protocol: SASL_SSL
-        sasl.mechanism: SCRAM-SHA-256
+        security.protocol: ${KAFKA_SECURITY_PROTOCOL:SASL_SSL}
+        sasl.mechanism: ${KAFKA_SASL_MECHANISM:SCRAM-SHA-256}
         sasl.jaas.config: 'org.apache.kafka.common.security.scram.ScramLoginModule required username="${KAFKA_USERNAME}" password="${KAFKA_PASSWORD}";'
 
-  # ---------- GraphiQL — disable in production ----------
+  # ---------- GraphiQL disabled in production ----------
   graphql:
     graphiql:
       enabled: false
 
+# ---------- Application properties ----------
+app:
+  jwt:
+    secret: ${JWT_SECRET}
+    expiration: ${JWT_EXPIRATION:3600000}
+
+  grok:
+    api-url: ${GROK_API_URL:https://api.groq.com/openai/v1/chat/completions}
+    api-key: ${GROK_API_KEY:}
+    model: ${GROK_MODEL:llama-3.1-8b-instant}
+
+  kafka:
+    topics:
+      transactions: ${KAFKA_TOPIC_TRANSACTIONS:bankradar.transactions}
+
+  fraud:
+    velocity-threshold: ${FRAUD_VELOCITY_THRESHOLD:5}
+    velocity-window-seconds: ${FRAUD_VELOCITY_WINDOW_SECONDS:60}
+    high-amount-threshold: ${FRAUD_HIGH_AMOUNT_THRESHOLD:10000}
+    llm-borderline-min: ${FRAUD_LLM_BORDERLINE_MIN:40}
+    llm-borderline-max: ${FRAUD_LLM_BORDERLINE_MAX:70}
+
 # ---------- gRPC ----------
-# App Platform only exposes ONE HTTP port externally (8080).
-# We disable the gRPC server here because nothing can reach 9090 from outside.
-# For real-time event streaming use the SSE endpoint at /api/alerts/stream instead.
+# App Platform exposes only one public HTTP port.
+# Local gRPC port 9090 is disabled in App Platform.
 grpc:
   server:
-    port: -1   # disabled
+    port: -1
 
-# Production logging — quieter, only WARN+ for noisy libraries
+# ---------- Actuator ----------
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,circuitbreakers,metrics
+  endpoint:
+    health:
+      show-details: always
+
+# ---------- Logging ----------
 logging:
   level:
     root: INFO
