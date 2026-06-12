@@ -3,9 +3,6 @@
 # ============================================================
 # Activated when SPRING_PROFILES_ACTIVE=appplatform.
 #
-# DigitalOcean App Platform dev database automatically injects:
-#   DATABASE_URL=${dev-db-xxxxx.DATABASE_URL}
-#
 # Required environment variables in App Platform:
 #
 #  App:
@@ -13,7 +10,7 @@
 #    JAVA_OPTS=-Xms128m -Xmx384m
 #
 #  Database:
-#    DATABASE_URL
+#    DB_HOSTNAME, DB_PORT, DB_DATABASE, DB_USERNAME, DB_PASSWORD
 #
 #  Redis / Upstash:
 #    REDIS_HOST, REDIS_PORT, REDIS_PASSWORD, REDIS_SSL
@@ -37,7 +34,9 @@ server:
 spring:
   # ---------- PostgreSQL / DigitalOcean Dev Database ----------
   datasource:
-    url: ${DATABASE_URL}
+    url: jdbc:postgresql://${DB_HOSTNAME}:${DB_PORT}/${DB_DATABASE}?sslmode=require
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 5
@@ -48,7 +47,6 @@ spring:
       ddl-auto: update
     properties:
       hibernate:
-        dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: false
     show-sql: false
     open-in-view: false
@@ -121,8 +119,6 @@ app:
     llm-borderline-max: ${FRAUD_LLM_BORDERLINE_MAX:70}
 
 # ---------- gRPC ----------
-# App Platform exposes only one public HTTP port.
-# Local gRPC port 9090 is disabled in App Platform.
 grpc:
   server:
     port: -1
