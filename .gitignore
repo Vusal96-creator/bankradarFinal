@@ -3,8 +3,11 @@ build/
 *.class
 *.jar
 !gradle-wrapper.jar
+
 .env
+.env.*
 *.env
+
 .DS_Store
 .idea/
 *.iml
