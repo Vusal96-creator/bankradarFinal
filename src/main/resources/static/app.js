@@ -1,8 +1,3 @@
-/* ============================================================
-   BankRadar — app.js
-   Updated UI + gRPC monitor + working alert filters
-   ============================================================ */
-
 const STATE = {
   token: null,
   username: null,
@@ -28,6 +23,7 @@ function authHeaders() {
 
 function showToast(msg, type = 'info', duration = 4000) {
   const t = $('toast');
+
   if (!t) {
     alert(msg);
     return;
@@ -51,11 +47,16 @@ function showToast(msg, type = 'info', duration = 4000) {
   `;
 
   clearTimeout(t._t);
-  t._t = setTimeout(() => t.style.display = 'none', duration);
+  t._t = setTimeout(() => {
+    t.style.display = 'none';
+  }, duration);
 }
 
 async function callApi(method, path, body) {
-  const headers = { 'Content-Type': 'application/json', ...authHeaders() };
+  const headers = {
+    'Content-Type': 'application/json',
+    ...authHeaders()
+  };
 
   const res = await fetch(path, {
     method,
@@ -78,8 +79,6 @@ async function callApi(method, path, body) {
   return text ? JSON.parse(text) : null;
 }
 
-/* ════════════ AUTH ════════════ */
-
 function fillLogin(username) {
   $('loginUsername').value = username;
   $('loginPassword').value = '';
@@ -96,7 +95,10 @@ async function login() {
   }
 
   try {
-    const res = await callApi('POST', '/api/auth/login', { username, password });
+    const res = await callApi('POST', '/api/auth/login', {
+      username,
+      password
+    });
 
     STATE.token = res.token;
     STATE.username = res.fullName || res.username || username;
@@ -107,6 +109,7 @@ async function login() {
     sessionStorage.setItem('br_r', STATE.role);
 
     afterLogin();
+
     showToast(`Xoş gəldiniz, ${STATE.username}! (${STATE.role})`, 'ok');
   } catch (e) {
     const el = $('loginError');
@@ -154,7 +157,7 @@ function afterLogin() {
 
   connectWebSocket();
   connectSSE();
-  refreshHealth();
+  refreshRiskService();
   loadAllTransactions();
 }
 
@@ -174,7 +177,10 @@ function logout() {
     username: null,
     role: null,
     ws: null,
-    sseCtrl: null
+    sseCtrl: null,
+    txCount: 0,
+    alertCount: 0,
+    sentTransactions: []
   });
 
   ALERT_STATE.alerts = [];
@@ -187,9 +193,8 @@ function logout() {
   $('userArea').hidden = true;
 
   clearAlerts();
+  updateSummaryCounts();
 }
-
-/* ════════════ TABS ════════════ */
 
 function initTabs() {
   document.querySelectorAll('.tab').forEach(tab => {
@@ -211,16 +216,9 @@ function initTabs() {
       if (name === 'alerts') {
         renderAlerts();
       }
-
-      if (name === 'health') {
-        refreshHealth();
-        refreshCB();
-      }
     });
   });
 }
-
-/* ════════════ TRANSACTION ════════════ */
 
 async function submitTransaction() {
   const tx = {
@@ -274,13 +272,16 @@ async function submitTransaction() {
     updateSummaryCounts();
 
     box.className = `classify-result ${cls}`;
-    box.innerHTML = `${icon} ${status}<small>Final status backend Risk Engine tərəfindən təyin olunur.</small>`;
+    box.innerHTML = `${icon} ${status}`;
     box.hidden = false;
 
-    showToast(`${icon} Tranzaksiya göndərildi: <strong>${status}</strong>`, cls === 'normal' ? 'ok' : cls === 'suspicious' ? 'warn' : 'err');
+    showToast(
+        `${icon} Tranzaksiya göndərildi: <strong>${status}</strong>`,
+        cls === 'normal' ? 'ok' : cls === 'suspicious' ? 'warn' : 'err'
+    );
 
     setTimeout(loadAllTransactions, 1500);
-    setTimeout(refreshHealth, 700);
+    setTimeout(refreshRiskService, 700);
   } catch (e) {
     box.className = 'classify-result fraud';
     box.innerHTML = `XƏTA<small>${e.message}</small>`;
@@ -321,6 +322,7 @@ function loadPreset(type) {
   };
 
   const p = presets[type];
+
   if (!p) return;
 
   $('txCustomerId').value = p.cust;
@@ -330,8 +332,6 @@ function loadPreset(type) {
   $('txMerchant').value = p.cat;
 }
 
-/* ════════════ TRANSACTIONS DB ════════════ */
-
 async function loadAllTransactions() {
   try {
     const res = await callApi('POST', '/graphql', {
@@ -340,9 +340,11 @@ async function loadAllTransactions() {
 
     if (res?.errors) {
       const msg = res.errors[0]?.message || 'Naməlum';
+
       ['listNormal', 'listSusp', 'listFraud'].forEach(id => {
         $(id).innerHTML = `<p class="center muted small">GraphQL: ${msg}</p>`;
       });
+
       return;
     }
 
@@ -351,15 +353,13 @@ async function loadAllTransactions() {
     const suspicious = flagged.filter(t => t.riskStatus === 'SUSPICIOUS');
     const fraud = flagged.filter(t => t.riskStatus === 'FRAUD');
 
-    const normal = STATE.sentTransactions.filter(t => {
-      return t.riskStatus === 'NORMAL';
-    });
+    const normal = STATE.sentTransactions.filter(t => t.riskStatus === 'NORMAL');
 
     renderTxColumn(
         'listNormal',
         normal,
         'normal',
-        'Lokal göndərilmiş NORMAL əməliyyatlar burada görünür. Riskli əməliyyatlar GraphQL-dən gəlir.'
+        'Normal əməliyyat yoxdur'
     );
 
     renderTxColumn('listSusp', suspicious, 'suspicious');
@@ -371,6 +371,7 @@ async function loadAllTransactions() {
 
     const total = normal.length + suspicious.length + fraud.length;
     STATE.txCount = Math.max(STATE.txCount, total);
+
     updateSummaryCounts();
   } catch (e) {
     ['listNormal', 'listSusp', 'listFraud'].forEach(id => {
@@ -381,6 +382,7 @@ async function loadAllTransactions() {
 
 function renderTxColumn(elementId, list, type, emptyMsg) {
   const el = $(elementId);
+
   if (!el) return;
 
   if (!list || list.length === 0) {
@@ -391,6 +393,7 @@ function renderTxColumn(elementId, list, type, emptyMsg) {
   el.innerHTML = list.map(tx => `
     <div class="tx-row">
       <strong>${(tx.id || '').slice(0, 8)}... · ${tx.customerId || '—'}</strong>
+
       <div class="tx-meta">
         <span class="tx-amt ${type}">${fmt(tx.amount)} ${tx.currency || ''}</span>
         <span>· ${tx.country || '—'}</span>
@@ -402,7 +405,9 @@ function renderTxColumn(elementId, list, type, emptyMsg) {
 }
 
 function fmt(n) {
-  if (n == null || Number.isNaN(Number(n))) return '—';
+  if (n == null || Number.isNaN(Number(n))) {
+    return '—';
+  }
 
   return new Intl.NumberFormat('az-AZ', {
     minimumFractionDigits: 2,
@@ -412,16 +417,23 @@ function fmt(n) {
 
 function updateSummaryCounts() {
   const txEl = $('metricDbCount');
-  const alertEl = $('metricRedisCount');
+  const warningEl = $('metricRedisCount');
 
-  if (txEl) txEl.textContent = `${STATE.txCount || STATE.sentTransactions.length || 0} tx`;
-  if (alertEl) alertEl.textContent = `${STATE.alertCount || ALERT_STATE.alerts.length || 0} alert`;
+  const txCount = STATE.txCount || STATE.sentTransactions.length || 0;
+  const warningCount = STATE.alertCount || ALERT_STATE.alerts.length || 0;
+
+  if (txEl) {
+    txEl.textContent = `${txCount}`;
+  }
+
+  if (warningEl) {
+    warningEl.textContent = `${warningCount}`;
+  }
 }
-
-/* ════════════ WEBSOCKET ════════════ */
 
 function connectWebSocket() {
   const el = $('wsStatus');
+
   if (!el) return;
 
   el.className = 'status-pill';
@@ -439,7 +451,7 @@ function connectWebSocket() {
 
       client.subscribe('/topic/alerts', msg => {
         try {
-          addAlert(JSON.parse(msg.body), 'WS');
+          addWarning(JSON.parse(msg.body), 'WS');
         } catch (_) {}
       });
     }, () => {
@@ -456,10 +468,9 @@ function connectWebSocket() {
   }
 }
 
-/* ════════════ SSE ════════════ */
-
 async function connectSSE() {
   const el = $('sseStatus');
+
   if (!el) return;
 
   el.className = 'status-pill';
@@ -474,7 +485,9 @@ async function connectSSE() {
       signal: ctrl.signal
     });
 
-    if (!res.ok) throw new Error(res.status);
+    if (!res.ok) {
+      throw new Error(res.status);
+    }
 
     el.className = 'status-pill on';
     el.innerHTML = '<span class="dot"></span> SSE aktiv';
@@ -486,19 +499,22 @@ async function connectSSE() {
 
     while (true) {
       const { done, value } = await reader.read();
+
       if (done) break;
 
       buf += decoder.decode(value, { stream: true });
 
       let idx;
+
       while ((idx = buf.indexOf('\n\n')) >= 0) {
         const block = buf.slice(0, idx);
         buf = buf.slice(idx + 2);
 
         const m = block.match(/^data:\s*(.+)$/m);
+
         if (m) {
           try {
-            addAlert(JSON.parse(m[1]), 'SSE');
+            addWarning(JSON.parse(m[1]), 'SSE');
           } catch (_) {}
         }
       }
@@ -512,18 +528,17 @@ async function connectSSE() {
   }
 }
 
-/* ════════════ ALERTS + FILTERS ════════════ */
+function warningKey(item) {
+  const id = item.transactionId || item.txId || item.id || '';
+  const status = item.status || item.riskStatus || '';
+  const score = item.riskScore || item.score || '';
 
-function alertKey(alert) {
-  const id = alert.transactionId || alert.txId || alert.id || '';
-  const status = alert.status || alert.riskStatus || '';
-  const score = alert.riskScore || alert.score || '';
   return `${id}:${status}:${score}`;
 }
 
-function addAlert(alert, source = 'LIVE') {
-  const normalized = normalizeAlert(alert, source);
-  const key = alertKey(normalized);
+function addWarning(item, source = 'LIVE') {
+  const normalized = normalizeWarning(item, source);
+  const key = warningKey(normalized);
 
   if (ALERT_STATE.seen.has(key)) {
     return;
@@ -534,10 +549,11 @@ function addAlert(alert, source = 'LIVE') {
 
   while (ALERT_STATE.alerts.length > 80) {
     const removed = ALERT_STATE.alerts.pop();
-    ALERT_STATE.seen.delete(alertKey(removed));
+    ALERT_STATE.seen.delete(warningKey(removed));
   }
 
   STATE.alertCount = ALERT_STATE.alerts.length;
+
   updateSummaryCounts();
   renderAlerts();
 
@@ -546,19 +562,19 @@ function addAlert(alert, source = 'LIVE') {
   }
 }
 
-function normalizeAlert(alert, source) {
+function normalizeWarning(item, source) {
   return {
-    ...alert,
+    ...item,
     source,
-    status: String(alert.status || alert.riskStatus || 'SUSPICIOUS').toUpperCase(),
-    transactionId: alert.transactionId || alert.txId || alert.id || '',
-    customerId: alert.customerId || alert.customer || '—',
-    amount: alert.amount,
-    currency: alert.currency || 'AZN',
-    country: alert.country || '—',
-    riskScore: alert.riskScore ?? alert.score ?? 0,
-    reasons: alert.reasons || alert.reason || '—',
-    timestamp: alert.timestamp || alert.createdAt || new Date().toISOString()
+    status: String(item.status || item.riskStatus || 'SUSPICIOUS').toUpperCase(),
+    transactionId: item.transactionId || item.txId || item.id || '',
+    customerId: item.customerId || item.customer || '—',
+    amount: item.amount,
+    currency: item.currency || 'AZN',
+    country: item.country || '—',
+    riskScore: item.riskScore ?? item.score ?? 0,
+    reasons: item.reasons || item.reason || '—',
+    timestamp: item.timestamp || item.createdAt || new Date().toISOString()
   };
 }
 
@@ -568,13 +584,14 @@ function applyAlertFilters() {
 
 function renderAlerts() {
   const list = $('alertsList');
+
   if (!list) return;
 
   const showFraud = $('filterFraud')?.checked ?? true;
   const showSuspicious = $('filterSuspicious')?.checked ?? true;
 
-  const filtered = ALERT_STATE.alerts.filter(alert => {
-    const status = String(alert.status || '').toUpperCase();
+  const filtered = ALERT_STATE.alerts.filter(item => {
+    const status = String(item.status || '').toUpperCase();
 
     if (status === 'FRAUD') return showFraud;
     if (status === 'SUSPICIOUS') return showSuspicious;
@@ -583,32 +600,33 @@ function renderAlerts() {
   });
 
   if (filtered.length === 0) {
-    list.innerHTML = `<p class="center muted">Uyğun bildiriş yoxdur. Filterləri dəyişin və ya riskli tranzaksiya göndərin.</p>`;
+    list.innerHTML = `<p class="center muted">Uyğun xəbərdarlıq yoxdur. Filterləri dəyişin və ya riskli tranzaksiya göndərin.</p>`;
     return;
   }
 
-  list.innerHTML = filtered.map(alert => {
-    const status = String(alert.status).toUpperCase();
+  list.innerHTML = filtered.map(item => {
+    const status = String(item.status).toUpperCase();
     const cssStatus = status === 'FRAUD' ? 'fraud' : 'suspicious';
-    const ts = alert.timestamp
-        ? new Date(alert.timestamp).toLocaleTimeString('az-AZ')
+
+    const ts = item.timestamp
+        ? new Date(item.timestamp).toLocaleTimeString('az-AZ')
         : new Date().toLocaleTimeString('az-AZ');
 
     return `
       <article class="alert-item ${cssStatus}">
         <div class="alert-head">
           <span class="badge ${cssStatus}">${status}</span>
-          <span class="src-badge">${alert.source || 'LIVE'}</span>
+          <span class="src-badge">${item.source || 'LIVE'}</span>
           <span class="ts">${ts}</span>
         </div>
 
         <div class="alert-body">
-          <div><strong>Tx:</strong> ${String(alert.transactionId || '').slice(0, 10)}...</div>
-          <div><strong>Müştəri:</strong> ${alert.customerId || '—'}</div>
-          <div><strong>Məbləğ:</strong> ${fmt(alert.amount)} ${alert.currency || ''}</div>
-          <div><strong>Ölkə:</strong> ${alert.country || '—'}</div>
-          <div><strong>Risk:</strong> ${alert.riskScore ?? 0}/100</div>
-          <div><strong>Səbəb:</strong> ${alert.reasons || '—'}</div>
+          <div><strong>Tx:</strong> ${String(item.transactionId || '').slice(0, 10)}...</div>
+          <div><strong>Müştəri:</strong> ${item.customerId || '—'}</div>
+          <div><strong>Məbləğ:</strong> ${fmt(item.amount)} ${item.currency || ''}</div>
+          <div><strong>Ölkə:</strong> ${item.country || '—'}</div>
+          <div><strong>Risk:</strong> ${item.riskScore ?? 0}/100</div>
+          <div><strong>Səbəb:</strong> ${item.reasons || '—'}</div>
         </div>
       </article>
     `;
@@ -619,69 +637,15 @@ function clearAlerts() {
   ALERT_STATE.alerts = [];
   ALERT_STATE.seen.clear();
   STATE.alertCount = 0;
+
   updateSummaryCounts();
 
   const list = $('alertsList');
+
   if (list) {
-    list.innerHTML = `<p class="center muted">Bildiriş yoxdur.</p>`;
+    list.innerHTML = `<p class="center muted">Xəbərdarlıq yoxdur.</p>`;
   }
 }
-
-/* ════════════ gRPC STATUS MONITOR ════════════ */
-
-async function checkGrpcStatus() {
-  const statusEl = $('grpcStatusBadge');
-  const serverEl = $('grpcServer');
-  const msgEl = $('grpcMessage');
-  const lastEl = $('grpcLastCheck');
-
-  if (statusEl) statusEl.textContent = 'Yoxlanılır...';
-  if (msgEl) msgEl.textContent = 'gRPC statusu yoxlanılır...';
-
-  try {
-    const res = await fetch('/api/grpc/status', {
-      method: 'GET',
-      headers: authHeaders()
-    });
-
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status}`);
-    }
-
-    const data = await res.json();
-
-    if (statusEl) statusEl.textContent = data.status || 'UP';
-    if (serverEl) serverEl.textContent = data.server || 'localhost:9090';
-
-    if (msgEl) {
-      msgEl.innerHTML = `
-        <strong>Status:</strong> ${data.status || 'UP'} ·
-        <strong>Service:</strong> ${data.service || 'RiskStreamService'} ·
-        ${data.message || 'gRPC daxili risk stream üçün aktivdir.'}
-      `;
-    }
-
-    if (lastEl) {
-      lastEl.textContent = new Date().toLocaleTimeString('az-AZ');
-    }
-  } catch (e) {
-    if (statusEl) statusEl.textContent = 'YOXLAMA XƏTASI';
-
-    if (msgEl) {
-      msgEl.innerHTML = `
-        gRPC status endpoint-i tapılmadı və ya cavab vermədi.
-        Backend-də <code>/api/grpc/status</code> endpoint-i əlavə olunmalıdır.
-        Xəta: ${e.message}
-      `;
-    }
-
-    if (lastEl) {
-      lastEl.textContent = new Date().toLocaleTimeString('az-AZ');
-    }
-  }
-}
-
-/* ════════════ AI CHAT ════════════ */
 
 function askPreset(question) {
   $('chatInput').value = question;
@@ -695,6 +659,7 @@ async function sendChat() {
   if (!msg) return;
 
   input.value = '';
+
   addChatMsg(msg, 'user');
 
   const btn = $('sendBtn');
@@ -704,7 +669,9 @@ async function sendChat() {
   addChatMsg('Cavab hazırlanır...', 'ai', 'thinking');
 
   try {
-    const res = await callApi('POST', '/api/ai/chat', { message: msg });
+    const res = await callApi('POST', '/api/ai/chat', {
+      message: msg
+    });
 
     document.querySelector('.thinking')?.remove();
     addChatMsg(res.answer || 'Cavab alınmadı', 'ai');
@@ -719,6 +686,7 @@ async function sendChat() {
 
 function addChatMsg(text, role, cls = '') {
   const box = $('chatMessages');
+
   if (!box) return;
 
   const div = document.createElement('div');
@@ -739,114 +707,51 @@ function addChatMsg(text, role, cls = '') {
   box.scrollTop = box.scrollHeight;
 }
 
-/* ════════════ HEALTH + CIRCUIT BREAKER ════════════ */
+function toUserRiskServiceState(state) {
+  const s = String(state || '').toUpperCase();
 
-async function refreshHealth() {
-  try {
-    const h = await fetch('/actuator/health').then(r => r.json());
-    const c = h.components || {};
+  if (s === 'CLOSED') return 'Sistem aktiv';
+  if (s === 'OPEN') return 'Xidmət məhdudlaşıb';
+  if (s === 'HALF_OPEN') return 'Yoxlanılır';
+  if (s === 'DISABLED') return 'Deaktivdir';
 
-    ['metricStatus', 'metricStatus2'].forEach(id => {
-      const el = $(id);
-      if (!el) return;
-
-      el.textContent = h.status;
-      el.style.color = h.status === 'UP' ? '#168a4a' : '#d0001b';
-    });
-
-    setHealthValue(c, 'db', 'metricDb2');
-    setHealthValue(c, 'redis', 'metricRedis2');
-    setHealthValue(c, 'diskSpace', 'metricDisk');
-  } catch (_) {
-    ['metricStatus', 'metricStatus2'].forEach(id => {
-      const el = $(id);
-      if (el) {
-        el.textContent = 'DOWN';
-        el.style.color = '#d0001b';
-      }
-    });
-  }
-
-  refreshCB();
+  return 'Yoxlanılır';
 }
 
-function setHealthValue(components, key, id) {
-  const el = $(id);
-  if (!el) return;
-
-  const v = components[key]?.status || '—';
-  el.textContent = v;
-  el.style.color = v === 'UP' ? '#168a4a' : '#d0001b';
-}
-
-async function refreshCB() {
+async function refreshRiskService() {
   try {
-    const cb = await fetch('/actuator/circuitbreakers').then(r => r.json());
+    const cb = await fetch('/actuator/circuitbreakers', {
+      headers: authHeaders()
+    }).then(r => r.json());
+
     const grok = cb.circuitBreakers?.grokFraudClient;
 
     if (!grok) {
-      if ($('cbStateBig')) $('cbStateBig').textContent = 'YOX';
-      if ($('cbStateValue')) $('cbStateValue').textContent = 'YOX';
+      if ($('cbStateValue')) {
+        $('cbStateValue').textContent = 'Məlumat yoxdur';
+      }
+
       return;
     }
 
     const state = grok.state || 'UNKNOWN';
+    const userState = toUserRiskServiceState(state);
 
     if ($('cbStateValue')) {
-      $('cbStateValue').textContent = state;
+      $('cbStateValue').textContent = userState;
       $('cbStateValue').style.color =
-          state === 'CLOSED' ? '#168a4a' :
-              state === 'OPEN' ? '#d0001b' :
-                  '#c77900';
+          state === 'CLOSED'
+              ? '#168a4a'
+              : state === 'OPEN'
+                  ? '#d0001b'
+                  : '#c77900';
     }
-
-    if ($('cbStateBig')) {
-      $('cbStateBig').textContent = state;
-      $('cbStateBig').className = 'cb-state-display ' + state;
+  } catch (_) {
+    if ($('cbStateValue')) {
+      $('cbStateValue').textContent = 'Yoxlanılır';
     }
-
-    const metrics = grok.metrics || {};
-    const success = metrics.numberOfSuccessfulCalls || 0;
-    const failed = metrics.numberOfFailedCalls || 0;
-    const rate = metrics.failureRate || 0;
-
-    if ($('cbSuccess')) $('cbSuccess').textContent = success;
-    if ($('cbFailed')) $('cbFailed').textContent = failed;
-    if ($('cbFailRate')) $('cbFailRate').textContent = (rate < 0 ? 0 : rate).toFixed(1) + '%';
-  } catch (_) {}
-}
-
-async function simulateCBFailure() {
-  showToast(
-      '6 borderline tranzaksiya göndərilir. Groq API uğursuzdursa, Circuit Breaker OPEN ola bilər.',
-      'warn',
-      6000
-  );
-
-  for (let i = 0; i < 6; i++) {
-    try {
-      await callApi('POST', '/api/transactions', {
-        customerId: 'CB-TEST-' + Date.now() + '-' + i,
-        amount: 12000 + i * 100,
-        currency: 'AZN',
-        country: 'RU',
-        merchantCategory: 'CRYPTO'
-      });
-    } catch (e) {
-      console.log('TX failed:', e.message);
-    }
-
-    await new Promise(r => setTimeout(r, 200));
   }
-
-  showToast('Tranzaksiyalar göndərildi. CB vəziyyətini izləyin.', 'ok');
-
-  [2000, 5000, 8000, 12000, 18000, 25000, 35000].forEach(t => {
-    setTimeout(refreshCB, t);
-  });
 }
-
-/* ════════════ BOOTSTRAP ════════════ */
 
 window.addEventListener('DOMContentLoaded', () => {
   initTabs();
@@ -863,7 +768,7 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 setInterval(() => {
-  if (STATE.token && document.querySelector('#tab-health.active')) {
-    refreshCB();
+  if (STATE.token) {
+    refreshRiskService();
   }
 }, 5000);

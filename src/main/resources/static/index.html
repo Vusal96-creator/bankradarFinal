@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>BankRadar · Real-Time Fraud Monitoring</title>
+  <title>BankRadar · Risk Monitoring</title>
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="/style.css">
 
@@ -17,7 +17,7 @@
     <span class="brand-mark">BR</span>
     <div>
       <span class="brand-name">BankRadar</span>
-      <span class="brand-subtitle">Fraud Risk Monitoring</span>
+      <span class="brand-subtitle">Risk Monitoring</span>
     </div>
   </div>
 
@@ -35,16 +35,27 @@
   <section id="loginView" class="login-shell">
     <div class="login-hero">
       <span class="eyebrow">Real-time risk intelligence</span>
-      <h1>Bank əməliyyatları üçün ağıllı fraud monitorinq paneli</h1>
+      <h1>Bank əməliyyatları üçün monitorinq paneli</h1>
       <p>
         BankRadar bank əməliyyatlarını izləyir, riskli davranışları analiz edir
         və şübhəli əməliyyatları əməkdaşlara canlı bildiriş kimi göstərir.
       </p>
 
       <div class="login-stats">
-        <div><strong>Kafka</strong><span>Async risk pipeline</span></div>
-        <div><strong>Redis</strong><span>Idempotency cache</span></div>
-        <div><strong>AI</strong><span>Borderline analysis</span></div>
+        <div>
+          <strong>Sürətli yoxlama</strong>
+          <span>Əməliyyatlar dərhal qiymətləndirilir</span>
+        </div>
+
+        <div>
+          <strong>Təkrar nəzarəti</strong>
+          <span>Eyni əməliyyat təkrar göstərilmir</span>
+        </div>
+
+        <div>
+          <strong>AI</strong>
+          <span>Risk analizi</span>
+        </div>
       </div>
     </div>
 
@@ -68,42 +79,50 @@
             <th>Rol</th>
           </tr>
           </thead>
+
           <tbody>
           <tr onclick="fillLogin('leyla.hasanova')">
             <td>Leyla Həsənova</td>
             <td><code>leyla.hasanova</code></td>
             <td>ANALYST</td>
           </tr>
+
           <tr onclick="fillLogin('kamran.rzayev')">
             <td>Kamran Rzayev</td>
             <td><code>kamran.rzayev</code></td>
             <td>ANALYST</td>
           </tr>
+
           <tr onclick="fillLogin('farid.mammadov')">
             <td>Farid Məmmədov</td>
             <td><code>farid.mammadov</code></td>
             <td>MANAGER</td>
           </tr>
+
           <tr onclick="fillLogin('nigar.valiyeva')">
             <td>Nigar Vəliyeva</td>
             <td><code>nigar.valiyeva</code></td>
             <td>MANAGER</td>
           </tr>
+
           <tr onclick="fillLogin('narmin.aliyeva')">
             <td>Nərmin Əliyeva</td>
             <td><code>narmin.aliyeva</code></td>
             <td>ADMIN</td>
           </tr>
+
           <tr onclick="fillLogin('rashad.karimli')">
             <td>Rəşad Kərimli</td>
             <td><code>rashad.karimli</code></td>
             <td>ADMIN</td>
           </tr>
+
           <tr onclick="fillLogin('system.gateway')">
             <td>System Gateway</td>
             <td><code>system.gateway</code></td>
             <td>SYSTEM</td>
           </tr>
+
           <tr onclick="fillLogin('core.processor')">
             <td>Core Processor</td>
             <td><code>core.processor</code></td>
@@ -111,10 +130,6 @@
           </tr>
           </tbody>
         </table>
-
-        <p class="muted small">
-          Sıraya klik etdikdə yalnız username yazılır. Şifrə frontend-də göstərilmir.
-        </p>
       </details>
 
       <div class="form-grid single">
@@ -164,7 +179,6 @@
         </div>
 
         <button class="btn btn-secondary btn-full" onclick="registerUser()">Qeydiyyatdan keç</button>
-        <p class="muted small">İstifadəçi database-ə yazılır, şifrə BCrypt hash kimi saxlanılır.</p>
       </details>
     </section>
   </section>
@@ -173,20 +187,20 @@
 
     <section class="hero-bank">
       <div>
-        <span class="eyebrow light">Bank security operations</span>
-        <h1>Real-time fraud radar</h1>
+        <span class="eyebrow light">Bank əməliyyat monitorinqi</span>
+        <h1>Canlı risk monitorinqi</h1>
         <p>
-          Tranzaksiyalar Kafka pipeline ilə risk analizinə göndərilir,
-          qayda mühərriki və AI dəstəyi ilə qiymətləndirilir, riskli nəticələr
-          isə canlı bildiriş kimi dashboard-a düşür.
+          BankRadar əməliyyatları izləməyə, riskli halları vaxtında görməyə
+          və müştəri əməliyyatları üzrə xəbərdarlıqları bir paneldə idarə etməyə kömək edir.
         </p>
 
         <div class="hero-actions">
           <button class="btn btn-light" onclick="document.querySelector('[data-tab=send]').click()">
             Tranzaksiya yoxla
           </button>
+
           <button class="btn btn-hero-outline" onclick="document.querySelector('[data-tab=alerts]').click()">
-            Canlı alertlər
+            Canlı xəbərdarlıqlar
           </button>
         </div>
       </div>
@@ -194,24 +208,19 @@
       <div class="hero-card">
         <span>Risk xidməti</span>
         <strong id="cbStateValue">—</strong>
-        <p>Circuit Breaker vəziyyəti</p>
+        <p>Xidmət vəziyyəti</p>
       </div>
     </section>
 
     <section class="dashboard-summary">
       <div class="summary-box">
-        <span>Sistem vəziyyəti</span>
-        <strong id="metricStatus">—</strong>
-      </div>
-
-      <div class="summary-box">
-        <span>Tranzaksiyalar</span>
+        <span>Tranzaksiyaların sayı</span>
         <strong id="metricDbCount">—</strong>
       </div>
 
       <div class="summary-box">
-        <span>Canlı alertlər</span>
-        <strong id="metricRedisCount">0 alert</strong>
+        <span>Riskli xəbərdarlıqlar</span>
+        <strong id="metricRedisCount">0</strong>
       </div>
 
       <div class="summary-box accent">
@@ -225,14 +234,13 @@
       <button class="tab" data-tab="alerts">Canlı bildirişlər</button>
       <button class="tab" data-tab="history">Tranzaksiyalar bazası</button>
       <button class="tab" data-tab="ai">AI köməkçi</button>
-      <button class="tab" data-tab="health">Sistem</button>
     </nav>
 
     <div class="tab-content active" id="tab-send">
       <section class="card elevated">
         <div class="card-header">
           <div>
-            <span class="section-kicker">Risk check</span>
+            <span class="section-kicker">Əməliyyat yoxlaması</span>
             <h3>Yeni tranzaksiya</h3>
           </div>
         </div>
@@ -306,54 +314,10 @@
           </div>
         </div>
 
-        <section class="grpc-panel">
-          <div class="grpc-main">
-            <div class="grpc-icon">gRPC</div>
-
-            <div>
-              <span class="section-kicker">Internal service stream</span>
-              <h3>gRPC Risk Stream Monitor</h3>
-              <p>
-                Bu hissə browser-in birbaşa gRPC qoşulması deyil. Frontend REST status endpoint-i
-                çağırır, backend isə daxili gRPC RiskStreamService vəziyyətini göstərir.
-              </p>
-            </div>
-          </div>
-
-          <div class="grpc-grid">
-            <div>
-              <span>Server</span>
-              <strong id="grpcServer">localhost:9090</strong>
-            </div>
-
-            <div>
-              <span>Service</span>
-              <strong>RiskStreamService</strong>
-            </div>
-
-            <div>
-              <span>Status</span>
-              <strong id="grpcStatusBadge">Yoxlanmayıb</strong>
-            </div>
-
-            <div>
-              <span>Son yoxlama</span>
-              <strong id="grpcLastCheck">—</strong>
-            </div>
-          </div>
-
-          <div class="grpc-footer">
-            <p id="grpcMessage">
-              gRPC statusunu yoxlamaq üçün düyməyə basın.
-            </p>
-            <button class="btn btn-primary btn-sm" onclick="checkGrpcStatus()">gRPC statusunu yoxla</button>
-          </div>
-        </section>
-
         <div class="alert-toolbar">
           <div>
-            <span class="section-kicker">Alert filterləri</span>
-            <h4>Risk bildirişlərini statusa görə süz</h4>
+            <span class="section-kicker">Riskli xəbərdarlıqlar</span>
+            <h4>Risk bildirişlərini statusa görə sırala</h4>
           </div>
 
           <div class="filter-actions">
@@ -372,7 +336,7 @@
         </div>
 
         <div id="alertsList" class="alerts-list">
-          <p class="center muted">Hələ bildiriş yoxdur. Fraud və ya şübhəli nümunə göndərin.</p>
+          <p class="center muted">Hələ xəbərdarlıq yoxdur. Fraud və ya şübhəli nümunə göndərin.</p>
         </div>
       </section>
     </div>
@@ -381,14 +345,15 @@
       <section class="card elevated">
         <div class="card-header">
           <div>
-            <span class="section-kicker">Database view</span>
+            <span class="section-kicker">Tranzaksiya siyahısı</span>
             <h3>Tranzaksiyalar bazası</h3>
           </div>
+
           <button class="btn btn-primary btn-sm" onclick="loadAllTransactions()">Yenilə</button>
         </div>
 
         <p class="muted">
-          DB-dəki tranzaksiyalar risk statusuna görə təsnif olunur.
+          Tranzaksiyalar risk statusuna görə təsnif olunur.
         </p>
 
         <div class="tx-classify">
@@ -423,23 +388,24 @@
       <section class="card elevated">
         <div class="card-header">
           <div>
-            <span class="section-kicker">GroqCloud assistant</span>
+            <span class="section-kicker">AI assistant</span>
             <h3>AI köməkçi</h3>
           </div>
         </div>
 
-        <div class="api-box">
-          AI API açarı frontend-də saxlanılmır. Açar yalnız backend environment variable kimi verilir:
-          <code>GROK_API_KEY</code>.
-        </div>
+        <p class="muted ai-helper-text">
+          Sualınızı yazın və risk halları üzrə qısa izah alın.
+        </p>
 
         <div class="actions compact">
           <button class="btn btn-secondary btn-sm" onclick="askPreset('Yüksək məbləğli xarici ölkə əməliyyatı niyə risklidir?')">
             Risk izahı
           </button>
-          <button class="btn btn-secondary btn-sm" onclick="askPreset('Bank əməkdaşı fraud alert gördükdə nə etməlidir?')">
+
+          <button class="btn btn-secondary btn-sm" onclick="askPreset('Bank əməkdaşı fraud xəbərdarlığı gördükdə nə etməlidir?')">
             İş prosedurları
           </button>
+
           <button class="btn btn-secondary btn-sm" onclick="askPreset('Şübhəli ilə fraud arasındakı fərq nədir?')">
             Status fərqi
           </button>
@@ -451,71 +417,6 @@
           <input id="chatInput" placeholder="Sual yazın..." onkeydown="if(event.key==='Enter')sendChat()">
           <button id="sendBtn" class="btn btn-primary" onclick="sendChat()">Göndər</button>
         </div>
-      </section>
-    </div>
-
-    <div class="tab-content" id="tab-health">
-      <section class="card elevated cb-card">
-        <div class="card-header">
-          <div>
-            <span class="section-kicker">Resilience4j</span>
-            <h3>Circuit Breaker Test</h3>
-          </div>
-          <button class="btn btn-secondary btn-sm" onclick="refreshCB()">Yenilə</button>
-        </div>
-
-        <p class="muted">
-          Groq AI servisi uğursuz cavablar verdikdə Circuit Breaker OPEN vəziyyətinə keçir.
-        </p>
-
-        <div class="cb-state-display CLOSED" id="cbStateBig">YOXLANIR</div>
-
-        <div class="cb-metrics">
-          <div class="cb-metric">
-            <span>Uğurlu</span>
-            <strong id="cbSuccess">0</strong>
-          </div>
-          <div class="cb-metric">
-            <span>Uğursuz</span>
-            <strong id="cbFailed">0</strong>
-          </div>
-          <div class="cb-metric">
-            <span>Uğursuzluq faizi</span>
-            <strong id="cbFailRate">0%</strong>
-          </div>
-        </div>
-
-        <div class="actions">
-          <button class="btn btn-warning" onclick="simulateCBFailure()">Sındırmağa çalış</button>
-        </div>
-      </section>
-
-      <section class="card elevated">
-        <div class="card-header">
-          <div>
-            <span class="section-kicker">System health</span>
-            <h3>Sistem komponentləri</h3>
-          </div>
-          <button class="btn btn-primary btn-sm" onclick="refreshHealth()">Yenilə</button>
-        </div>
-
-        <div class="health-grid">
-          <div class="summary-box"><span>Status</span><strong id="metricStatus2">—</strong></div>
-          <div class="summary-box"><span>Database</span><strong id="metricDb2">—</strong></div>
-          <div class="summary-box"><span>Redis</span><strong id="metricRedis2">—</strong></div>
-          <div class="summary-box"><span>Disk</span><strong id="metricDisk">—</strong></div>
-        </div>
-      </section>
-
-      <section class="card elevated">
-        <div class="card-header">
-          <div>
-            <span class="section-kicker">API docs</span>
-            <h3>Swagger API</h3>
-          </div>
-        </div>
-
-        <a href="/swagger-ui.html" target="_blank" class="btn btn-primary">Swagger UI aç</a>
       </section>
     </div>
 
